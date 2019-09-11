@@ -10,6 +10,8 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.release.directory>${project.build.directory}/${project.artifactId}-${project.version}
+        </project.release.directory>
     </properties>
 
     <repositories>
@@ -33,11 +35,18 @@
             <groupId>net.sourceforge.jargs</groupId>
             <artifactId>jargs</artifactId>
             <version>1.0</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>junit</groupId>
+                    <artifactId>junit</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <!-- https://mvnrepository.com/artifact/org.apache.maven.plugins/maven-compiler-plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -46,6 +55,62 @@
                     <release>12</release>
                     <showWarnings>true</showWarnings>
                     <showDeprecation>true</showDeprecation>
+                </configuration>
+            </plugin>
+
+            <!-- https://mvnrepository.com/artifact/org.apache.maven.plugins/maven-jar-plugin -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.1.2</version>
+                <configuration>
+                    <outputDirectory>${project.release.directory}/modules</outputDirectory>
+                    <archive>
+                        <manifest>
+                            <mainClass>com.matbadev.openairplay.AirPlay</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+
+            <!-- https://mvnrepository.com/artifact/org.apache.maven.plugins/maven-dependency-plugin -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.1.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.release.directory}/modules</outputDirectory>
+                            <includeScope>compile</includeScope> <!-- Include all except test dependencies -->
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- https://mvnrepository.com/artifact/org.codehaus.mojo/exec-maven-plugin -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>1.6.0</version>
+                <configuration>
+                    <executable>java</executable>
+                    <!-- 2019-03-03 Workaround for "java.lang.String cannot be cast to org.codehaus.mojo.exec.Modulepath" -->
+                    <!-- See: https://github.com/mojohaus/exec-maven-plugin/issues/75 -->
+                    <longModulepath>false</longModulepath>
+                    <workingDirectory>${project.release.directory}</workingDirectory>
+                    <arguments>
+                        <!-- See: https://docs.oracle.com/javase/10/tools/java.htm -->
+                        <argument>--illegal-access=deny</argument>
+                        <argument>--module-path</argument>
+                        <argument>${project.release.directory}/modules</argument>
+                        <argument>--module</argument>
+                        <argument>${project.artifactId}</argument>
+                    </arguments>
                 </configuration>
             </plugin>
         </plugins>
