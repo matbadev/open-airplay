@@ -1,3 +1,5 @@
 secret.properties
 Java/bin
 Java/build
+.idea
+*.iml
