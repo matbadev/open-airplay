@@ -1,30 +1,41 @@
 package com.matbadev.openairplay;
 
-import java.awt.*;
-import java.awt.image.*;
-import java.io.*;
-import java.net.*;
-import java.security.*;
-import java.util.*;
+import jargs.gnu.CmdLineParser;
 
-import javax.imageio.*;
-import javax.jmdns.*;
-import javax.swing.*;
-
-import jargs.gnu.*;
+import javax.imageio.ImageIO;
+import javax.jmdns.JmDNS;
+import javax.jmdns.ServiceInfo;
+import javax.swing.JDialog;
+import javax.swing.JOptionPane;
+import java.awt.AWTException;
+import java.awt.Dimension;
+import java.awt.Graphics2D;
+import java.awt.Rectangle;
+import java.awt.Robot;
+import java.awt.Toolkit;
+import java.awt.Window;
+import java.awt.image.BufferedImage;
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
+import java.net.HttpURLConnection;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.MalformedURLException;
+import java.net.NetworkInterface;
+import java.net.URL;
+import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
 
 public class AirPlay {
-    public static final String DNSSD_TYPE = "_airplay._tcp.local.";
-
-    public static final String NONE = "None";
-    public static final String SLIDE_LEFT = "SlideLeft";
-    public static final String SLIDE_RIGHT = "SlideRight";
-    public static final String DISSOLVE = "Dissolve";
-    public static final String USERNAME = "Airplay";
-    public static final int PORT = 7000;
-    public static final int APPLETV_WIDTH = 1280;
-    public static final int APPLETV_HEIGHT = 720;
-    public static final float APPLETV_ASPECT = (float) APPLETV_WIDTH/APPLETV_HEIGHT;
 
     protected String hostname;
     protected String name;
@@ -34,36 +45,43 @@ public class AirPlay {
     protected Map params;
     protected String authorization;
     protected Auth auth;
-    protected int appletv_width = APPLETV_WIDTH;
-    protected int appletv_height = APPLETV_HEIGHT;
-    protected float appletv_aspect = APPLETV_ASPECT;
+    protected int appletv_width = Config.APPLETV_WIDTH;
+    protected int appletv_height = Config.APPLETV_HEIGHT;
+    protected float appletv_aspect = Config.APPLETV_ASPECT;
 
     //AirPlay class
     public AirPlay(Service service) {
-        this(service.hostname,service.port,service.name);
+        this(service.hostname, service.port, service.name);
     }
+
     public AirPlay(String hostname) {
-        this(hostname,PORT);
+        this(hostname, Config.PORT);
     }
+
     public AirPlay(String hostname, int port) {
-        this(hostname,port,hostname);
+        this(hostname, port, hostname);
     }
+
     public AirPlay(String hostname, int port, String name) {
         this.hostname = hostname;
         this.port = port;
         this.name = name;
     }
+
     public void setScreenSize(int width, int height) {
         appletv_width = width;
         appletv_height = height;
-        appletv_aspect = (float) width/height;
+        appletv_aspect = (float) width / height;
     }
+
     public void setPassword(String password) {
         this.password = password;
     }
+
     public void setAuth(Auth auth) {
         this.auth = auth;
     }
+
     protected String md5Digest(String input) {
         byte[] source;
         try {
@@ -94,62 +112,70 @@ public class AirPlay {
         return result;
 
     }
+
     protected String makeAuthorization(Map params, String password, String method, String uri) {
         String realm = (String) params.get("realm");
         String nonce = (String) params.get("nonce");
-        String ha1 = md5Digest(USERNAME+":"+realm+":"+password);
-        String ha2 = md5Digest(method+":"+uri);
-        String response = md5Digest(ha1+":"+nonce+":"+ha2);
-        authorization = "Digest username=\""+USERNAME+"\", "
-            +"realm=\""+realm+"\", "
-            +"nonce=\""+nonce+"\", "
-            +"uri=\""+uri+"\", "
-            +"response=\""+response+"\"";
+        String ha1 = md5Digest(Config.USERNAME + ":" + realm + ":" + password);
+        String ha2 = md5Digest(method + ":" + uri);
+        String response = md5Digest(ha1 + ":" + nonce + ":" + ha2);
+        authorization = "Digest username=\"" + Config.USERNAME + "\", "
+            + "realm=\"" + realm + "\", "
+            + "nonce=\"" + nonce + "\", "
+            + "uri=\"" + uri + "\", "
+            + "response=\"" + response + "\"";
         return authorization;
     }
+
     protected Map getAuthParams(String authString) {
         Map params = new HashMap();
         int firstSpace = authString.indexOf(' ');
-        String digest = authString.substring(0,firstSpace);
-        String rest = authString.substring(firstSpace+1).replaceAll("\r\n"," ");
+        String digest = authString.substring(0, firstSpace);
+        String rest = authString.substring(firstSpace + 1).replaceAll("\r\n", " ");
         String[] lines = rest.split("\", ");
         for (int i = 0; i < lines.length; i++) {
             int split = lines[i].indexOf("=\"");
-            String key = lines[i].substring(0,split);
-            String value = lines[i].substring(split+2);
-            if (value.charAt(value.length()-1) == '"') {
-                value = value.substring(0,value.length()-1);
+            String key = lines[i].substring(0, split);
+            String value = lines[i].substring(split + 2);
+            if (value.charAt(value.length() - 1) == '"') {
+                value = value.substring(0, value.length() - 1);
             }
-            params.put(key,value);
+            params.put(key, value);
         }
         return params;
     }
+
     protected String setPassword() throws IOException {
         if (password != null) {
             return password;
         } else {
             if (auth != null) {
-                password = auth.getPassword(hostname,name);
+                password = auth.getPassword(hostname, name);
                 return password;
             } else {
                 throw new IOException("Authorisation requied");
             }
         }
     }
+
     protected String doHTTP(String method, String uri) throws IOException {
         return doHTTP(method, uri, null);
     }
+
     protected String doHTTP(String method, String uri, ByteArrayOutputStream os) throws IOException {
         return doHTTP(method, uri, os, null);
     }
+
     protected String doHTTP(String method, String uri, ByteArrayOutputStream os, Map headers) throws IOException {
         return doHTTP(method, uri, os, new HashMap(), true);
     }
+
     protected String doHTTP(String method, String uri, ByteArrayOutputStream os, Map headers, boolean repeat) throws IOException {
         URL url = null;
         try {
-            url = new URL("http://"+hostname+":"+port+uri);
-        } catch(MalformedURLException e) { }
+            url = new URL("http://" + hostname + ":" + port + uri);
+        } catch (MalformedURLException e) {
+        }
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setUseCaches(false);
         conn.setDoOutput(true);
@@ -157,19 +183,19 @@ public class AirPlay {
 
         if (params != null) {
             //Try to reuse password if already set
-            headers.put("Authorization",makeAuthorization(params,password,method,uri));
+            headers.put("Authorization", makeAuthorization(params, password, method, uri));
         }
         if (headers.size() > 0) {
-            conn.setRequestProperty("User-Agent","MediaControl/1.0");
+            conn.setRequestProperty("User-Agent", "MediaControl/1.0");
             Object[] keys = headers.keySet().toArray();
             for (int i = 0; i < keys.length; i++) {
-                conn.setRequestProperty((String) keys[i],(String) headers.get(keys[i]));
+                conn.setRequestProperty((String) keys[i], (String) headers.get(keys[i]));
             }
         }
 
         if (os != null) {
             byte[] data = os.toByteArray();
-            conn.setRequestProperty("Content-Length",""+data.length);
+            conn.setRequestProperty("Content-Length", "" + data.length);
         }
         conn.connect();
         if (os != null) {
@@ -183,7 +209,7 @@ public class AirPlay {
                 String authstring = conn.getHeaderFields().get("WWW-Authenticate").get(0);
                 if (setPassword() != null) {
                     params = getAuthParams(authstring);
-                    return doHTTP(method,uri,os,headers,false);
+                    return doHTTP(method, uri, os, headers, false);
                 } else {
                     return null;
                 }
@@ -197,7 +223,7 @@ public class AirPlay {
             BufferedReader rd = new BufferedReader(new InputStreamReader(is));
             String line;
             StringBuffer response = new StringBuffer();
-            while((line = rd.readLine()) != null) {
+            while ((line = rd.readLine()) != null) {
                 response.append(line);
                 response.append("\r\n");
             }
@@ -205,13 +231,16 @@ public class AirPlay {
             return response.toString();
         }
     }
+
     public void stop() {
         try {
             stopPhotoThread();
             doHTTP("POST", "/stop");
             params = null;
-        } catch (Exception e) { }
+        } catch (Exception e) {
+        }
     }
+
     protected BufferedImage scaleImage(BufferedImage image) {
         int width = image.getWidth();
         int height = image.getHeight();
@@ -220,7 +249,7 @@ public class AirPlay {
         } else {
             int scaledheight;
             int scaledwidth;
-            float image_aspect = (float) width/height;
+            float image_aspect = (float) width / height;
             if (image_aspect > appletv_aspect) {
                 scaledheight = new Float(appletv_width / image_aspect).intValue();
                 scaledwidth = appletv_width;
@@ -235,36 +264,44 @@ public class AirPlay {
             return scaledimage;
         }
     }
+
     public void photo(String filename) throws IOException {
-        this.photo(filename,NONE);
+        this.photo(filename, Config.NONE);
     }
+
     public void photo(String filename, String transition) throws IOException {
-        this.photo(new File(filename),transition);
+        this.photo(new File(filename), transition);
     }
+
     public void photo(File imagefile) throws IOException {
-        this.photo(imagefile,NONE);
+        this.photo(imagefile, Config.NONE);
     }
+
     public void photo(File imagefile, String transition) throws IOException {
         BufferedImage image = ImageIO.read(imagefile);
-        photo(image,transition);
+        photo(image, transition);
     }
+
     public void photo(BufferedImage image) throws IOException {
-        this.photo(image,NONE);
+        this.photo(image, Config.NONE);
     }
+
     public void photo(BufferedImage image, String transition) throws IOException {
         stopPhotoThread();
         BufferedImage scaledimage = scaleImage(image);
-        photoRaw(scaledimage,transition);
-        photothread = new PhotoThread(this,scaledimage,5000);
+        photoRaw(scaledimage, transition);
+        photothread = new PhotoThread(this, scaledimage, 5000);
         photothread.start();
     }
+
     protected void photoRawCompress(BufferedImage image, String transition) throws IOException {
         BufferedImage scaledimage = scaleImage(image);
         photoRaw(scaledimage, transition);
     }
+
     protected void photoRaw(BufferedImage image, String transition) throws IOException {
         Map headers = new HashMap();
-        headers.put("X-Apple-Transition",transition);
+        headers.put("X-Apple-Transition", transition);
         ByteArrayOutputStream os = new ByteArrayOutputStream();
         boolean resultWrite = ImageIO.write(image, "jpg", os);
         /* TODO: Could adjust quality
@@ -274,6 +311,7 @@ public class AirPlay {
          */
         doHTTP("PUT", "/photo", os, headers);
     }
+
     public static BufferedImage captureScreen() throws AWTException {
         Toolkit tk = Toolkit.getDefaultToolkit();
         Dimension dim = tk.getScreenSize();
@@ -283,100 +321,20 @@ public class AirPlay {
         return image;
     }
 
-    public class PhotoThread extends Thread {
-        private final AirPlay airplay;
-        private BufferedImage image = null;
-        private int timeout = 5000;
-
-        public PhotoThread(AirPlay airplay) {
-            this(airplay,null,1000);
-        }
-        public PhotoThread(AirPlay airplay, BufferedImage image, int timeout) {
-            this.airplay = airplay;
-            this.image = image;
-            this.timeout = timeout;
-        }
-        public void run() {
-            while (!Thread.interrupted()) {
-                try {
-                    if (image == null) {
-                        BufferedImage frame = airplay.scaleImage(AirPlay.captureScreen());
-                        airplay.photoRawCompress(frame, NONE);
-                    } else {
-                        airplay.photoRaw(image,NONE);
-                        Thread.sleep(Math.round(0.9*timeout));
-                    }
-                } catch (InterruptedException e) {
-                    break;
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    break;
-                }
-            }
-        }
-    }
     public void stopPhotoThread() {
         if (photothread != null) {
             photothread.interrupt();
-            while (photothread.isAlive());
+            while (photothread.isAlive()) ;
             photothread = null;
         }
     }
+
     public void desktop() throws AWTException, IOException {
         stopPhotoThread();
         photothread = new PhotoThread(this);
         photothread.start();
     }
 
-    //Auth classes
-    public static interface Auth {
-        public abstract String getPassword(String hostname, String name);
-    }
-    public static class AuthDialog implements Auth {
-        private Window parent;
-        public AuthDialog(Window parent) {
-            this.parent = parent;
-        }
-        public String getPassword(String hostname, String name) {
-            final JPasswordField password = new JPasswordField();
-            JOptionPane optionPane = new JOptionPane(password,JOptionPane.PLAIN_MESSAGE,JOptionPane.OK_CANCEL_OPTION);
-            JDialog dialog = optionPane.createDialog(parent,"Password:");
-            dialog.setLocationRelativeTo(parent);
-            dialog.setVisible(true);
-            int result = (Integer)optionPane.getValue();
-            dialog.dispose();
-            if(result == JOptionPane.OK_OPTION){
-                return new String(password.getPassword());
-            }
-            return null;
-        }
-    }
-    public static class AuthConsole implements Auth {
-        public String getPassword(String hostname, String name) {
-            String display = hostname == name ? hostname : name+" ("+hostname+")";
-            return AirPlay.waitforuser("Please input password for "+display);
-        }
-    }
-
-    //Bonjour classes
-    public static class Service {
-        public String name;
-        public String hostname;
-        public int port;
-
-        public Service(String hostname) {
-            this(hostname,PORT);
-        }
-        public Service(String hostname, int port) {
-            this(hostname,port,hostname);
-        }
-
-        public Service(String hostname, int port, String name) {
-            this.hostname = hostname;
-            this.port = port;
-            this.name = name;
-        }
-    }
     protected static Service[] formatSearch(ServiceInfo[] services) throws IOException {
         Service[] results = new Service[services.length];
         for (int i = 0; i < services.length; i++) {
@@ -386,6 +344,7 @@ public class AirPlay {
         }
         return results;
     }
+
     public static java.util.List<Service> search() throws IOException {
         return search(1000);
     }
@@ -393,9 +352,10 @@ public class AirPlay {
     /**
      * List all valid inet addresses of this machine
      * will include IPv4 and IPv6 addresses
+     *
      * @return list of inetaddresses
      */
-    public static java.util.List<InetAddress> listNetworkAddresses(){
+    public static java.util.List<InetAddress> listNetworkAddresses() {
         ArrayList<InetAddress> validAddresses = new ArrayList<InetAddress>();
 
         Enumeration<NetworkInterface> netInter;
@@ -407,7 +367,7 @@ public class AirPlay {
 
                 for (InetAddress iaddress : Collections.list(ni
                     .getInetAddresses())) {
-                    if(iaddress.isLoopbackAddress()){
+                    if (iaddress.isLoopbackAddress()) {
                         continue;
                     }
                     validAddresses.add(iaddress);
@@ -422,6 +382,7 @@ public class AirPlay {
 
     /**
      * Search for existing apple tv services on all network interfaces
+     *
      * @param timeout for each interface query
      * @return list of available services
      * @throws IOException
@@ -429,14 +390,14 @@ public class AirPlay {
     public static java.util.List<Service> search(int timeout) throws IOException {
         java.util.List<InetAddress> networkAddresses = listNetworkAddresses();
 
-        java.util.List<Service> availableServices = new ArrayList<AirPlay.Service>();
+        java.util.List<Service> availableServices = new ArrayList<>();
 
         //iterate over all existing addresses and search for apple tv devices
-        for(InetAddress address:networkAddresses){
+        for (InetAddress address : networkAddresses) {
             final JmDNS jmdns = JmDNS.create(address);
-            Service[] tmpResults = formatSearch(jmdns.list(DNSSD_TYPE, timeout));
-            for(Service service:tmpResults){
-                if(!availableServices.contains(service)){
+            Service[] tmpResults = formatSearch(jmdns.list(Config.DNSSD_TYPE, timeout));
+            for (Service service : tmpResults) {
+                if (!availableServices.contains(service)) {
                     availableServices.add(service);
                 }
             }
@@ -445,17 +406,19 @@ public class AirPlay {
 
         return availableServices;
     }
+
     public static AirPlay searchDialog(Window parent) throws IOException {
         return searchDialog(parent, 6000);
     }
+
     public static AirPlay searchDialog(Window parent, int timeout) throws IOException {
         JDialog search = new JDialog(parent, "Searching...");
         search.setVisible(true);
-        search.setBounds(0,0,200,100);
+        search.setBounds(0, 0, 200, 100);
         search.setLocationRelativeTo(parent);
         search.toFront();
         search.setVisible(true);
-        java.util.List<AirPlay.Service> services = AirPlay.search();
+        java.util.List<Service> services = AirPlay.search();
         search.setVisible(false);
         if (!services.isEmpty()) {
             //Choose AppleTV
@@ -464,7 +427,7 @@ public class AirPlay {
                 Service service = services.get(i);
                 choices[i] = service.name + " (" + service.hostname + ")";
             }
-            String input = (String) JOptionPane.showInputDialog(parent,"","Select AppleTV",JOptionPane.PLAIN_MESSAGE, null,choices,choices[0]);
+            String input = (String) JOptionPane.showInputDialog(parent, "", "Select AppleTV", JOptionPane.PLAIN_MESSAGE, null, choices, choices[0]);
             if (input != null) {
                 int index = -1;
                 for (int i = 0; i < choices.length; i++) {
@@ -478,8 +441,8 @@ public class AirPlay {
                 return airplay;
             }
             return null;
-        }else{
-            JOptionPane.showMessageDialog(parent, "No AppleTVs found","Error", JOptionPane.ERROR_MESSAGE);
+        } else {
+            JOptionPane.showMessageDialog(parent, "No AppleTVs found", "Error", JOptionPane.ERROR_MESSAGE);
             return null;
         }
     }
@@ -487,20 +450,21 @@ public class AirPlay {
     /**
      * Display a dialog for selecting apple tv's resolution
      * TODO future improvement would be reading the resolution automatically from the apple tv. I guess this is possible somehow
-     * @param parent (a parent window, can be null)
+     *
+     * @param parent  (a parent window, can be null)
      * @param airplay the airplay instance of which you want to adjust the resolution
      */
-    public static void selectResolutionDialog(Window parent, AirPlay airplay){
+    public static void selectResolutionDialog(Window parent, AirPlay airplay) {
         String[] choices = new String[]{
             "Full HD  - 1080p - 1920x1080",
             "HD Ready - 720p -1280 × 720"
         };
 
-        String input = (String) JOptionPane.showInputDialog(parent, "", "Select AppleTV Resolution",JOptionPane.PLAIN_MESSAGE, null, choices, choices[0]);
+        String input = (String) JOptionPane.showInputDialog(parent, "", "Select AppleTV Resolution", JOptionPane.PLAIN_MESSAGE, null, choices, choices[0]);
         if (input != null) {
-            if(input.equals(choices[0])){
+            if (input.equals(choices[0])) {
                 airplay.setScreenSize(1920, 1080);
-            }else if(input.equals(choices[1])){
+            } else if (input.equals(choices[1])) {
                 airplay.setScreenSize(1280, 720);
             }
         }
@@ -511,48 +475,52 @@ public class AirPlay {
         System.out.println("commands: -s {stop} | -p file {photo} | -d {desktop} | -?");
         System.out.println("java -jar airplay.jar -h hostname[:port] [-a password] command");
     }
+
     public static String waitforuser() {
         return waitforuser("Press return to quit");
     }
+
     public static String waitforuser(String message) {
         System.out.println(message);
         BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
         String s = null;
         try {
-            while ((s = in.readLine()) != null && !(s.length() >= 0)) { }
+            while ((s = in.readLine()) != null && !(s.length() >= 0)) {
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
         return s;
     }
+
     public static void main(String[] args) {
         try {
             CmdLineParser cmd = new CmdLineParser();
-            CmdLineParser.Option hostopt = cmd.addStringOption('h',"hostname");
-            CmdLineParser.Option stopopt = cmd.addBooleanOption('s',"stop");
-            CmdLineParser.Option photoopt = cmd.addStringOption('p',"photo");
-            CmdLineParser.Option desktopopt = cmd.addBooleanOption('d',"desktop");
-            CmdLineParser.Option passopt = cmd.addStringOption('a',"password");
-            CmdLineParser.Option helpopt = cmd.addBooleanOption('?',"help");
+            CmdLineParser.Option hostopt = cmd.addStringOption('h', "hostname");
+            CmdLineParser.Option stopopt = cmd.addBooleanOption('s', "stop");
+            CmdLineParser.Option photoopt = cmd.addStringOption('p', "photo");
+            CmdLineParser.Option desktopopt = cmd.addBooleanOption('d', "desktop");
+            CmdLineParser.Option passopt = cmd.addStringOption('a', "password");
+            CmdLineParser.Option helpopt = cmd.addBooleanOption('?', "help");
             cmd.parse(args);
 
             String hostname = (String) cmd.getOptionValue(hostopt);
 
             Boolean showHelp = (Boolean) cmd.getOptionValue(helpopt);
 
-            if(null != showHelp && showHelp ){
+            if (null != showHelp && showHelp) {
                 usage();
-            }else if (hostname == null) { //show select dialog if no host address is given
+            } else if (hostname == null) { //show select dialog if no host address is given
                 AirPlay airplay = searchDialog(null);
-                if(null != airplay){
+                if (null != airplay) {
                     selectResolutionDialog(null, airplay);
                     airplay.desktop();
                 }
             } else {
                 AirPlay airplay;
-                String[] hostport = hostname.split(":",2);
+                String[] hostport = hostname.split(":", 2);
                 if (hostport.length > 1) {
-                    airplay = new AirPlay(hostport[0],Integer.parseInt(hostport[1]));
+                    airplay = new AirPlay(hostport[0], Integer.parseInt(hostport[1]));
                 } else {
                     airplay = new AirPlay(hostport[0]);
                 }
@@ -576,4 +544,5 @@ public class AirPlay {
             e.printStackTrace();
         }
     }
+
 }
