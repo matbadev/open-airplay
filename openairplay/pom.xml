@@ -12,11 +12,27 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
+    <repositories>
+        <repository>
+            <id>nuiton.release</id>
+            <name>NuitonReleaseRepository</name>
+            <url>http://maven.nuiton.org/nexus/content/groups/releases/</url>
+        </repository>
+    </repositories>
+
     <dependencies>
+        <!-- https://mvnrepository.com/artifact/org.jmdns/jmdns -->
         <dependency>
             <groupId>org.jmdns</groupId>
             <artifactId>jmdns</artifactId>
             <version>3.5.5</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/net.sourceforge.jargs/jargs -->
+        <dependency>
+            <groupId>net.sourceforge.jargs</groupId>
+            <artifactId>jargs</artifactId>
+            <version>1.0</version>
         </dependency>
     </dependencies>
 
