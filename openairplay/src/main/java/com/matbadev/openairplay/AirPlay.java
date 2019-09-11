@@ -21,13 +21,13 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.NetworkInterface;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -49,7 +49,6 @@ public class AirPlay {
     protected int appletv_height = Config.APPLETV_HEIGHT;
     protected float appletv_aspect = Config.APPLETV_ASPECT;
 
-    //AirPlay class
     public AirPlay(Service service) {
         this(service.hostname, service.port, service.name);
     }
@@ -83,22 +82,16 @@ public class AirPlay {
     }
 
     protected String md5Digest(String input) {
-        byte[] source;
-        try {
-            //Get byte according by specified coding.
-            source = input.getBytes("UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            source = input.getBytes();
-        }
+        //Get byte according by specified coding.
+        byte[] source = input.getBytes(StandardCharsets.UTF_8);
         String result = null;
-        char hexDigits[] = {'0', '1', '2', '3', '4', '5', '6', '7',
-            '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+        char[] hexDigits = new char[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
             md.update(source);
             //The result should be one 128 integer
-            byte temp[] = md.digest();
-            char str[] = new char[16 * 2];
+            byte[] temp = md.digest();
+            char[] str = new char[16 * 2];
             int k = 0;
             for (int i = 0; i < 16; i++) {
                 byte byte0 = temp[i];
@@ -133,10 +126,10 @@ public class AirPlay {
         String digest = authString.substring(0, firstSpace);
         String rest = authString.substring(firstSpace + 1).replaceAll("\r\n", " ");
         String[] lines = rest.split("\", ");
-        for (int i = 0; i < lines.length; i++) {
-            int split = lines[i].indexOf("=\"");
-            String key = lines[i].substring(0, split);
-            String value = lines[i].substring(split + 2);
+        for (String line : lines) {
+            int split = line.indexOf("=\"");
+            String key = line.substring(0, split);
+            String value = line.substring(split + 2);
             if (value.charAt(value.length() - 1) == '"') {
                 value = value.substring(0, value.length() - 1);
             }
@@ -188,8 +181,8 @@ public class AirPlay {
         if (headers.size() > 0) {
             conn.setRequestProperty("User-Agent", "MediaControl/1.0");
             Object[] keys = headers.keySet().toArray();
-            for (int i = 0; i < keys.length; i++) {
-                conn.setRequestProperty((String) keys[i], (String) headers.get(keys[i]));
+            for (Object key : keys) {
+                conn.setRequestProperty((String) key, (String) headers.get(key));
             }
         }
 
@@ -222,7 +215,7 @@ public class AirPlay {
             InputStream is = conn.getInputStream();
             BufferedReader rd = new BufferedReader(new InputStreamReader(is));
             String line;
-            StringBuffer response = new StringBuffer();
+            StringBuilder response = new StringBuilder();
             while ((line = rd.readLine()) != null) {
                 response.append(line);
                 response.append("\r\n");
@@ -300,7 +293,7 @@ public class AirPlay {
     }
 
     protected void photoRaw(BufferedImage image, String transition) throws IOException {
-        Map headers = new HashMap();
+        Map<String, String> headers = new HashMap<>();
         headers.put("X-Apple-Transition", transition);
         ByteArrayOutputStream os = new ByteArrayOutputStream();
         boolean resultWrite = ImageIO.write(image, "jpg", os);
@@ -317,8 +310,7 @@ public class AirPlay {
         Dimension dim = tk.getScreenSize();
         Rectangle rect = new Rectangle(dim);
         Robot robot = new Robot();
-        BufferedImage image = robot.createScreenCapture(rect);
-        return image;
+        return robot.createScreenCapture(rect);
     }
 
     public void stopPhotoThread() {
@@ -329,13 +321,13 @@ public class AirPlay {
         }
     }
 
-    public void desktop() throws AWTException, IOException {
+    public void desktop() {
         stopPhotoThread();
         photothread = new PhotoThread(this);
         photothread.start();
     }
 
-    protected static Service[] formatSearch(ServiceInfo[] services) throws IOException {
+    protected static Service[] formatSearch(ServiceInfo[] services) {
         Service[] results = new Service[services.length];
         for (int i = 0; i < services.length; i++) {
             ServiceInfo service = services[i];
@@ -356,7 +348,7 @@ public class AirPlay {
      * @return list of inetaddresses
      */
     public static java.util.List<InetAddress> listNetworkAddresses() {
-        ArrayList<InetAddress> validAddresses = new ArrayList<InetAddress>();
+        ArrayList<InetAddress> validAddresses = new ArrayList<>();
 
         Enumeration<NetworkInterface> netInter;
         try {
@@ -385,7 +377,6 @@ public class AirPlay {
      *
      * @param timeout for each interface query
      * @return list of available services
-     * @throws IOException
      */
     public static java.util.List<Service> search(int timeout) throws IOException {
         java.util.List<InetAddress> networkAddresses = listNetworkAddresses();
@@ -431,7 +422,7 @@ public class AirPlay {
             if (input != null) {
                 int index = -1;
                 for (int i = 0; i < choices.length; i++) {
-                    if (input == choices[i]) {
+                    if (input.equals(choices[i])) {
                         index = i;
                         break;
                     }
@@ -474,23 +465,6 @@ public class AirPlay {
     public static void usage() {
         System.out.println("commands: -s {stop} | -p file {photo} | -d {desktop} | -?");
         System.out.println("java -jar airplay.jar -h hostname[:port] [-a password] command");
-    }
-
-    public static String waitforuser() {
-        return waitforuser("Press return to quit");
-    }
-
-    public static String waitforuser(String message) {
-        System.out.println(message);
-        BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
-        String s = null;
-        try {
-            while ((s = in.readLine()) != null && !(s.length() >= 0)) {
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return s;
     }
 
     public static void main(String[] args) {

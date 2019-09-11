@@ -5,8 +5,8 @@ import java.awt.image.BufferedImage;
 class PhotoThread extends Thread {
 
     private final AirPlay airplay;
-    private BufferedImage image = null;
-    private int timeout = 5000;
+    private BufferedImage image;
+    private int timeout;
 
     public PhotoThread(AirPlay airplay) {
         this(airplay, null, 1000);
